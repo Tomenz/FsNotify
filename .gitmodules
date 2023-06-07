@@ -1,0 +1,3 @@
+[submodule "SrvLib"]
+	path = SrvLib
+	url = https://github.com/Tomenz/SrvLib
