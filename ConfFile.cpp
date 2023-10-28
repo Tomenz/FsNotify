@@ -80,7 +80,7 @@ vector<wstring> ConfFile::get(const wstring& strSektion)
     return vReturn;
 }
 
-vector<wstring> ConfFile::get(const wstring& strSektion, const wstring& strValue)
+vector<wstring> ConfFile::get(const wstring& strSektion, const wstring& strAction)
 {
     CheckFileLoaded();
 
@@ -89,31 +89,35 @@ vector<wstring> ConfFile::get(const wstring& strSektion, const wstring& strValue
     const auto& section = m_mSections.find(strSektion);
     if (section != end(m_mSections))
     {
-        auto item = section->second.equal_range(strValue);
+        auto item = section->second.equal_range(strAction);
         for (; item.first != item.second; ++item.first)
         {
-            vReturn.push_back(item.first->second);
+            vReturn.push_back(item.first->first);
         }
     }
 
     return vReturn;
 }
 
-const wstring& ConfFile::getUnique(const wstring& strSektion, const wstring& strValue)
+const wstring& ConfFile::getUnique(const wstring& strSektion, const wstring& strAction, const wstring& strValue)
 {
     CheckFileLoaded();
 
     const auto section = m_mSections.find(strSektion);
     if (section != m_mSections.end())
     {
-        const auto item = section->second.equal_range(strValue);
-        if (item.first != item.second)
+        const auto action = section->second.find(strAction);
+        if (action != section->second.end())
         {
-            //if (distance(item.first, item.second) > 1)
-            //    MyTrace("Warnung: Configfile has hidden entry's in section \'", strSektion, "\', key \'", strValue, "\' exist more than once");
-            unordered_multimap<wstring, wstring>::const_iterator it = item.first, itNext = it;
-            while (++itNext != item.second && it != item.second) ++it;
-            return it->second;  // Letztes Element    //item.first->second;
+            const auto item = action->second.equal_range(strValue);
+            if (item.first != item.second)
+            {
+                //if (distance(item.first, item.second) > 1)
+                //    MyTrace("Warnung: Configfile has hidden entry's in section \'", strSektion, "\', key \'", strValue, "\' exist more than once");
+                unordered_map<wstring, wstring>::const_iterator it = item.first, itNext = it;
+                while (++itNext != item.second && it != item.second) ++it;
+                return it->second;  // Letztes Element    //item.first->second;
+            }
         }
     }
 
@@ -144,7 +148,8 @@ int ConfFile::LoadFile(const wstring& strFilename)
         {
             fin.imbue(std::locale(fin.getloc(), new codecvt_utf8<wchar_t>));
 
-            unordered_multimap<wstring, wstring>* LastSection = nullptr;
+            unordered_map<wstring, unordered_map<wstring, wstring>>* LastSection = nullptr;
+            unordered_map<wstring, wstring>* LastTyp = nullptr;
             auto TrimString = [](wstring strVal) -> wstring
             {
                 size_t nPos = strVal.find_last_not_of(L" \t\r\n");
@@ -167,10 +172,12 @@ int ConfFile::LoadFile(const wstring& strFilename)
                 {
                     if (strLine[0] == L'[' && strLine[strLine.size() - 1] == L']')
                     {
+                        LastSection = nullptr;
+                        LastTyp = nullptr;
                         const auto strTmp = TrimString(strLine.substr(1, strLine.size() - 2));
                         if (strTmp.empty() == false)
                         {
-                            const auto& paRet = m_mSections.insert(make_pair(strTmp, unordered_multimap<wstring, wstring>()));
+                            const auto& paRet = m_mSections.insert(make_pair(strTmp, unordered_map<wstring, unordered_map<wstring, wstring>>()));
                             if (paRet.second == true)
                             {
                                 LastSection = &paRet.first->second;
@@ -183,7 +190,21 @@ int ConfFile::LoadFile(const wstring& strFilename)
                     {
                         const auto strTmp = TrimString(strLine.substr(0, nPos));
                         if (strTmp.empty() == false)
-                            LastSection->insert(make_pair(strTmp, TrimString(strLine.substr(nPos + 1))));
+                        {
+                            if (strTmp == L"monitortyp")
+                            {
+                                LastTyp = nullptr;
+                                const auto& paRet = LastSection->insert(make_pair(TrimString(strLine.substr(nPos + 1)), unordered_map<wstring, wstring>()));
+                                if (paRet.second == true)
+                                {
+                                    LastTyp = &paRet.first->second;
+                                }
+                            }
+                            else if (LastTyp != nullptr)
+                            {
+                                LastTyp->insert(make_pair(strTmp, TrimString(strLine.substr(nPos + 1))));
+                            }
+                        }
                     }
                     else if (strLine[0] == L'@')
                     {

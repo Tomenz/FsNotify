@@ -64,7 +64,7 @@ int main(int argc, const char* argv[])
         time_t tLastNull;
         std::regex reFilter;
     }WATCHITEM;
-    std::map<int, WATCHITEM> mapWatches;
+    std::map<int, std::vector<WATCHITEM>> mapWatches;
     std::mutex mxWatchList;
 
     svParam.fnStartCallBack = [&m_strModulePath, &mapWatches, &mxWatchList]()
@@ -96,38 +96,53 @@ int main(int argc, const char* argv[])
         cFsysNotify.SetCallBackFunction([&](int iWatch, uint32_t nMask, uint32_t /*nCookie*/, std::string strName)
         {
             auto itMonitor = mapWatches.find(iWatch);
-            if (itMonitor != mapWatches.end() && nMask & itMonitor->second.nWatchTyp)
+            if (itMonitor != mapWatches.end())
             {
-                if (std::regex_match(strName, itMonitor->second.reFilter) == true)
+                for (auto vMonitor : itMonitor->second)
                 {
-                    std::string strDebug;
-                    itMonitor->second.nCount++;
-                    time_t tNow = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-                    if (itMonitor->second.nLimitSek != 0 && tNow - itMonitor->second.tLastNull > itMonitor->second.nLimitSek)
+                    if (nMask & vMonitor.nWatchTyp)
                     {
-                        strDebug += "Zeit abgelaufen, Dif-Time=" + std::to_string(tNow - itMonitor->second.tLastNull) + ", SollTime=" + std::to_string(itMonitor->second.nLimitSek) + ", ";
-                        itMonitor->second.nCount = 1;
-                        itMonitor->second.tLastNull = tNow;
-                    }
+                        std::wstring strMonitor;
+                        switch(vMonitor.nWatchTyp)
+                        {
+                        case IN_CREATE: strMonitor = L"CREATE"; break;
+                        case IN_DELETE: strMonitor = L"DELETE"; break;
+                        case IN_OPEN:   strMonitor = L"OPEN"; break;
+                        case IN_CLOSE:  strMonitor = L"CLOSE"; break;
+                        }
 
-                    if (itMonitor->second.nCount >= itMonitor->second.nLimitAnz)
-                    {
-                        strDebug += "Max erreicht, Anzahl=" + std::to_string(itMonitor->second.nCount) + ", nLimitAnz: " + std::to_string(itMonitor->second.nLimitAnz) + ", Dif-Time=" + std::to_string(tNow - itMonitor->second.tLastNull);
-                        itMonitor->second.nCount = 0;
-                        itMonitor->second.tLastNull = tNow;
+                        if (strMonitor.empty() == false && std::regex_match(strName, vMonitor.reFilter) == true)
+                        {
+                            std::string strDebug("Event: " + to_string(vMonitor.nWatchTyp) + ", Name: " + strName + ", ");
+                            vMonitor.nCount++;
+                            time_t tNow = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+                            if (vMonitor.nLimitSek != 0 && tNow - vMonitor.tLastNull > vMonitor.nLimitSek)
+                            {
+                                strDebug += "Zeit abgelaufen, Dif-Time=" + std::to_string(tNow - vMonitor.tLastNull) + ", SollTime=" + std::to_string(vMonitor.nLimitSek) + ", ";
+                                vMonitor.nCount = 1;
+                                vMonitor.tLastNull = tNow;
+                            }
 
-                        std::wstring strAction = conf.getUnique(itMonitor->second.strWatchItem, L"actiontyp");
-                        std::transform(std::begin(strAction), std::end(strAction), std::begin(strAction), [](wchar_t c) noexcept { return static_cast<wchar_t>(::toupper(c)); });
-                        std::wstring strActionParam = conf.getUnique(itMonitor->second.strWatchItem, L"actionpara");
-                        if (strAction == L"SYSLOG")
-                            syslog(LOG_NOTICE, "%s", &strName[0]);
-                        if (strAction == L"SYSTEM")
-                            system(std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strActionParam).c_str());
-                    }
-                    if (strDebug.empty() == false)
-                    {
-                        strDebug += "\n";
-                        OutputDebugStringA(strDebug.c_str());
+                            if (vMonitor.nCount >= vMonitor.nLimitAnz)
+                            {
+                                strDebug += "Max erreicht, Anzahl=" + std::to_string(vMonitor.nCount) + ", nLimitAnz: " + std::to_string(vMonitor.nLimitAnz) + ", Dif-Time=" + std::to_string(tNow - vMonitor.tLastNull);
+                                vMonitor.nCount = 0;
+                                vMonitor.tLastNull = tNow;
+
+                                std::wstring strAction = conf.getUnique(vMonitor.strWatchItem, strMonitor, L"actiontyp");
+                                std::transform(std::begin(strAction), std::end(strAction), std::begin(strAction), [](wchar_t c) noexcept { return static_cast<wchar_t>(::toupper(c)); });
+                                std::wstring strActionParam = conf.getUnique(vMonitor.strWatchItem, strMonitor, L"actionpara");
+                                if (strAction == L"SYSLOG")
+                                    syslog(LOG_NOTICE, "%s", &strName[0]);
+                                if (strAction == L"SYSTEM")
+                                    system(std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strActionParam).c_str());
+                            }
+                            if (strDebug.empty() == false)
+                            {
+                                strDebug += "\n";
+                                OutputDebugStringA(strDebug.c_str());
+                            }
+                        }
                     }
                 }
             }
@@ -136,44 +151,58 @@ int main(int argc, const char* argv[])
         vector<wstring> vSections = conf.get();
         for (auto& strItem : vSections)
         {
-            std::wstring strMonitor = conf.getUnique(strItem, L"monitortyp");
-            std::transform(std::begin(strMonitor), std::end(strMonitor), std::begin(strMonitor), [](wchar_t c) noexcept { return static_cast<wchar_t>(::toupper(c)); });
-
             uint32_t nMask{0};  // IN_CREATE | IN_DELETE | IN_OPEN | IN_CLOSE
-            if (strMonitor == L"CREATE")
-                nMask |= IN_CREATE;
-            if (nMask != 0)
+            std::vector<WATCHITEM> vWatches;
+
+            vector<wstring> vActions = conf.get(strItem);
+            for (auto& strMonitor : vActions)
             {
-                std::string strFilter = std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(conf.getUnique(strItem, L"filter"));
-                uint32_t nLimitAnz{0};
-                uint32_t nLimitSek{0};
-                std::wstring strLimit = conf.getUnique(strItem, L"limit");
-                static const std::wregex rxLimit(L"^(\\d+)\\s*(?:\\/\\s*(\\d+)?\\s*([smh]))?$");
-                std::wsmatch mr;
-                if (std::regex_search(strLimit, mr ,rxLimit) == true && mr.size() >= 2 && mr[1].matched == true)
+                std::transform(std::begin(strMonitor), std::end(strMonitor), std::begin(strMonitor), [](wchar_t c) noexcept { return static_cast<wchar_t>(::toupper(c)); });
+
+                uint32_t nMonitor{0};
+                if (strMonitor == L"CREATE")
+                    nMonitor = IN_CREATE;
+                if (strMonitor == L"DELETE")
+                    nMonitor = IN_DELETE;
+                if (strMonitor == L"OPEN")
+                    nMonitor = IN_OPEN;
+                if (strMonitor == L"CLOSE")
+                    nMonitor = IN_CLOSE;
+                if (nMonitor != 0)
                 {
-                    nLimitAnz = std::stoi(mr[1]);
-                    if (mr.size() >= 3 && mr[3].matched == true)
+                    nMask |= nMonitor;
+                    std::string strFilter = std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(conf.getUnique(strItem, strMonitor, L"filter"));
+                    uint32_t nLimitAnz{0};
+                    uint32_t nLimitSek{0};
+                    std::wstring strLimit = conf.getUnique(strItem, strMonitor, L"limit");
+                    static const std::wregex rxLimit(L"^(\\d+)\\s*(?:\\/\\s*(\\d+)?\\s*([smh]))?$");
+                    std::wsmatch mr;
+                    if (std::regex_search(strLimit, mr ,rxLimit) == true && mr.size() >= 2 && mr[1].matched == true)
                     {
-                        nLimitSek = (mr.size() == 4 && mr[2].matched == true) ? std::stoi(mr[2]) : 1;
+                        nLimitAnz = std::stoi(mr[1]);
+                        if (mr.size() >= 3 && mr[3].matched == true)
+                        {
+                            nLimitSek = (mr.size() == 4 && mr[2].matched == true) ? std::stoi(mr[2]) : 1;
 
-                        if (mr[3].str()[0] == 'm')
-                            nLimitSek *= 60;
-                        else if (mr[3].str()[0] == 'h')
-                            nLimitSek *= 3600;
-                        //  else if (mr[3][0] == 's')
-                        //  do nothing
+                            if (mr[3].str()[0] == 'm')
+                                nLimitSek *= 60;
+                            else if (mr[3].str()[0] == 'h')
+                                nLimitSek *= 3600;
+                            //  else if (mr[3][0] == 's')
+                            //  do nothing
+                        }
                     }
+                    vWatches.push_back(WATCHITEM{strItem, nMonitor, nLimitAnz, nLimitSek, 0, std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()), std::regex(strFilter)});
                 }
-
-                mxWatchList.lock();
-                int iWatchId = cFsysNotify.AddWatch(std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strItem), nMask);
-                if (iWatchId > 0)
-                {
-                    mapWatches.emplace(iWatchId, WATCHITEM{strItem, nMask, nLimitAnz, nLimitSek, 0, std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()), std::regex(strFilter)});
-                }
-                mxWatchList.unlock();
             }
+
+            mxWatchList.lock();
+            int iWatchId = cFsysNotify.AddWatch(std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strItem), nMask);
+            if (iWatchId > 0)
+            {
+                mapWatches.emplace(iWatchId, vWatches);
+            }
+            mxWatchList.unlock();
         }
 
     };

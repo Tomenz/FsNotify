@@ -15,10 +15,17 @@ else()
 endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_compile_options(
-  "-Wall" "-Wpedantic" "-Wextra" "-fexceptions" "-fstandalone-debug"
-  "$<$<CONFIG:DEBUG>:-O0;-g3;-ggdb>"
-)
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  add_compile_options(
+    "-Wall" "-Wpedantic" "-Wextra" "-fexceptions" "-fstandalone-debug"
+    "$<$<CONFIG:DEBUG>:-O0;-g3;-ggdb>"
+  )
+else()
+  add_compile_options(
+    "-Wall" "-Wpedantic" "-Wextra" "-fexceptions"
+    "$<$<CONFIG:DEBUG>:-O0;-g3;-ggdb>"
+  )
+endif()
 
 include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${CMAKE_SOURCE_DIR}/SrvLib)
