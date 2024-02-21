@@ -32,6 +32,15 @@ include_directories(${CMAKE_SOURCE_DIR}/SrvLib)
 
 add_subdirectory(SrvLib EXCLUDE_FROM_ALL)
 
+file(READ "DirNotify.cpp" SrcFile)
+string(REGEX MATCH "szSrvName = L\"([^\"]*)\"" _ ${SrcFile})
+set(SrvName ${CMAKE_MATCH_1})
+message("ServiceName: ${SrvName}")
+
+if ("${SrvName}" STREQUAL "")
+  set(SrvName ${PROJECT_NAME})
+endif()
+
 set(targetSrc
         ${CMAKE_CURRENT_LIST_DIR}/DirNotify.cpp
         ${CMAKE_CURRENT_LIST_DIR}/ConfFile.cpp
@@ -40,11 +49,18 @@ set(targetSrc
 add_executable(${PROJECT_NAME}  ${targetSrc})
 target_link_libraries(${PROJECT_NAME} srvlib pthread)
 
-file(READ SrvLib/init.d/examplesrv FILE_CONTENTS)
-string(REPLACE "ExampleSrv" ${PROJECT_NAME} NEW_FILE_CONTENTS ${FILE_CONTENTS})
-file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}srv ${NEW_FILE_CONTENTS})
+if (NOT EXISTS(${CMAKE_CURRENT_BINARY_DIR}/${SrvName}srv))
+  file(READ SrvLib/init.d/examplesrv FILE_CONTENTS)
+  string(REPLACE "ExampleSrv" ${SrvName} FILE_CONTENTS ${FILE_CONTENTS})
+  file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/${SrvName}srv ${FILE_CONTENTS})
+endif()
 
-file(READ SrvLib/example.service FILE_CONTENTS)
-string(REPLACE "ExampleSrv" ${PROJECT_NAME} NEW_FILE_CONTENTS ${FILE_CONTENTS})
-string(REPLACE "~" ${CMAKE_CURRENT_BINARY_DIR} NEW_FILE_CONTENTS ${NEW_FILE_CONTENTS})
-file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.service ${NEW_FILE_CONTENTS})
+if (NOT EXISTS(${CMAKE_CURRENT_BINARY_DIR}/${SrvName}.service))
+  file(READ SrvLib/example.service FILE_CONTENTS)
+  string(REPLACE "ExampleSrv" ${SrvName} FILE_CONTENTS ${FILE_CONTENTS})
+  string(REPLACE "~" ${CMAKE_SOURCE_DIR} FILE_CONTENTS ${FILE_CONTENTS})
+  string(REPLACE "Some Example server" "Notify Service" FILE_CONTENTS ${FILE_CONTENTS})
+  string(REPLACE "example/" "" FILE_CONTENTS ${FILE_CONTENTS})
+  string(REPLACE "example" "" FILE_CONTENTS ${FILE_CONTENTS})
+  file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/${SrvName}.service ${FILE_CONTENTS})
+endif()
