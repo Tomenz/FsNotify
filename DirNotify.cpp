@@ -98,7 +98,7 @@ int main(int argc, const char* argv[])
             auto itMonitor = mapWatches.find(iWatch);
             if (itMonitor != mapWatches.end())
             {
-                for (auto vMonitor : itMonitor->second)
+                for (auto& vMonitor : itMonitor->second)
                 {
                     if (nMask & vMonitor.nWatchTyp)
                     {
@@ -116,6 +116,8 @@ int main(int argc, const char* argv[])
                             std::string strDebug("Event: " + to_string(vMonitor.nWatchTyp) + ", Name: " + strName + ", ");
                             vMonitor.nCount++;
                             time_t tNow = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+                            if (vMonitor.tLastNull == 0)
+                                vMonitor.tLastNull = tNow;
                             if (vMonitor.nLimitSek != 0 && tNow - vMonitor.tLastNull > vMonitor.nLimitSek)
                             {
                                 strDebug += "Zeit abgelaufen, Dif-Time=" + std::to_string(tNow - vMonitor.tLastNull) + ", SollTime=" + std::to_string(vMonitor.nLimitSek) + ", ";
