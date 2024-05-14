@@ -105,10 +105,19 @@ int main(int argc, const char* argv[])
                         std::wstring strMonitor;
                         switch(vMonitor.nWatchTyp)
                         {
-                        case IN_CREATE: strMonitor = L"CREATE"; break;
-                        case IN_DELETE: strMonitor = L"DELETE"; break;
-                        case IN_OPEN:   strMonitor = L"OPEN"; break;
-                        case IN_CLOSE:  strMonitor = L"CLOSE"; break;
+                        case IN_ACCESS:         strMonitor = L"ACCESS"; break;
+                        case IN_ATTRIB:         strMonitor = L"ATTRIB"; break;
+                        case IN_CLOSE_WRITE:    strMonitor = L"CLOSE_WRITE"; break;
+                        case IN_CLOSE_NOWRITE:  strMonitor = L"CLOSE_NOWRITE"; break;
+                        case IN_CREATE:         strMonitor = L"CREATE"; break;
+                        case IN_DELETE:         strMonitor = L"DELETE"; break;
+                        case IN_DELETE_SELF:    strMonitor = L"DELETE_SELF"; break;
+                        case IN_MODIFY:         strMonitor = L"MODIFY"; break;
+                        case IN_MOVE_SELF:      strMonitor = L"MOVE_SELF"; break;
+                        case IN_MOVED_FROM:     strMonitor = L"MOVED_FROM"; break;
+                        case IN_MOVED_TO:       strMonitor = L"MOVED_TO"; break;
+                        case IN_OPEN:           strMonitor = L"OPEN"; break;
+                        case IN_CLOSE:          strMonitor = L"CLOSE"; break;
                         }
 
                         if (strMonitor.empty() == false && std::regex_match(strName, vMonitor.reFilter) == true)
@@ -134,10 +143,29 @@ int main(int argc, const char* argv[])
                                 std::wstring strAction = conf.getUnique(vMonitor.strWatchItem, strMonitor, L"actiontyp");
                                 std::transform(std::begin(strAction), std::end(strAction), std::begin(strAction), [](wchar_t c) noexcept { return static_cast<wchar_t>(::toupper(c)); });
                                 std::wstring strActionParam = conf.getUnique(vMonitor.strWatchItem, strMonitor, L"actionpara");
+                                strActionParam = std::regex_replace(strActionParam, std::wregex(L"\\{NOTIFYITEM\\}"), vMonitor.strWatchItem);
+
                                 if (strAction == L"SYSLOG")
                                     syslog(LOG_NOTICE, "%s", &strName[0]);
                                 if (strAction == L"SYSTEM")
-                                    system(std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strActionParam).c_str());
+                                {
+                                    std::string strSystem(std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t>().to_bytes(strActionParam));
+                                    bool bSkip{false};
+                                    if (strSystem.find("{NAME}") != std::string::npos)
+                                    {
+                                        if (!strName.empty())
+                                            strSystem = std::regex_replace(strSystem, std::regex("\\{NAME\\}"), strName);
+                                        else
+                                            bSkip = true;
+                                    }
+                                    if (!bSkip)
+                                    {
+                                        std::thread([](std::string strParam)
+                                        {
+                                            system(strParam.c_str());
+                                        }, strSystem).detach();
+                                    }
+                                }
                             }
                             if (strDebug.empty() == false)
                             {
@@ -162,10 +190,28 @@ int main(int argc, const char* argv[])
                 std::transform(std::begin(strMonitor), std::end(strMonitor), std::begin(strMonitor), [](wchar_t c) noexcept { return static_cast<wchar_t>(::toupper(c)); });
 
                 uint32_t nMonitor{0};
+                if (strMonitor == L"ACCESS")
+                    nMonitor = IN_ACCESS;
+                if (strMonitor == L"ATTRIB")
+                    nMonitor = IN_ATTRIB;
+                if (strMonitor == L"CLOSE_WRITE")
+                    nMonitor = IN_CLOSE_WRITE;
+                if (strMonitor == L"CLOSE_NOWRITE")
+                    nMonitor = IN_CLOSE_NOWRITE;
                 if (strMonitor == L"CREATE")
                     nMonitor = IN_CREATE;
                 if (strMonitor == L"DELETE")
                     nMonitor = IN_DELETE;
+                if (strMonitor == L"DELETE_SELF")
+                    nMonitor = IN_DELETE_SELF;
+                if (strMonitor == L"MODIFY")
+                    nMonitor = IN_MODIFY;
+                if (strMonitor == L"MOVE_SELF")
+                    nMonitor = IN_MOVE_SELF;
+                if (strMonitor == L"MOVED_FROM")
+                    nMonitor = IN_MOVED_FROM;
+                if (strMonitor == L"MOVED_TO")
+                    nMonitor = IN_MOVED_TO;
                 if (strMonitor == L"OPEN")
                     nMonitor = IN_OPEN;
                 if (strMonitor == L"CLOSE")
