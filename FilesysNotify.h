@@ -7,6 +7,7 @@
 #include <thread>
 #include <functional>
 
+#include <unistd.h>
 #include <sys/inotify.h>
 #include <poll.h>
 
@@ -26,7 +27,7 @@ public:
 
     int AddWatch(const std::string& strPath, const uint32_t nMask)
     {
-        int iWatch = inotify_add_watch(m_fd, strPath.c_str(), nMask);
+        const int iWatch = inotify_add_watch(m_fd, strPath.c_str(), nMask);
         if (iWatch == -1)
             return iWatch;
         m_mapWatches.emplace(iWatch, strPath);
@@ -35,18 +36,24 @@ public:
 
     int DelWatch(int iWatch)
     {
-        int iRet = inotify_rm_watch(m_fd, iWatch);
+        if (m_mapWatches.find(iWatch) == m_mapWatches.end())
+            return -1;
+
+        const int iRet = inotify_rm_watch(m_fd, iWatch);
         if (iRet == 0)
+        {
             m_mapWatches.erase(iWatch);
-        return iRet;
+            return  iRet;
+        }
+        return errno;
     }
 
     int StopAllWatch()
     {
-        int iRet = 0;
+        int iRet{0};
         for (auto it = m_mapWatches.begin(); it != m_mapWatches.end();)
         {
-            int iRes = inotify_rm_watch(m_fd, it->first);
+            const int iRes = inotify_rm_watch(m_fd, it->first);
             if (iRes == 0) {
                 m_mapWatches.erase(it->first);
                 it = m_mapWatches.begin();
@@ -67,7 +74,7 @@ public:
         fds[0].events = POLLIN;
 
         while (!m_bStop) {
-            int poll_num = poll(fds, nfds, 100);
+            const int poll_num = poll(fds, nfds, 100);
             if (poll_num == 0)
                 continue;
             if (poll_num == -1) {
@@ -91,7 +98,7 @@ public:
 
                         /* Read some events. */
 
-                        ssize_t len = read(m_fd, buf, sizeof(buf));
+                        const ssize_t len = read(m_fd, buf, sizeof(buf));
                         if (len == -1 && errno != EAGAIN) {
                             perror("read");
                             exit(EXIT_FAILURE);
@@ -109,8 +116,8 @@ public:
                                 ptr += sizeof(struct inotify_event) + event->len) {
 
                             event = (const struct inotify_event *) ptr;
-                            if (event->mask & IN_IGNORED)
-                                continue;
+                            //if (event->mask & IN_IGNORED)
+                            //    continue;
 
                             std::string strName;
                             if (event->len)

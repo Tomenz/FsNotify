@@ -31,6 +31,7 @@ public:
     vector<wstring> get();
     vector<wstring> get(const wstring& strSektion);
     vector<wstring> get(const wstring& strSektion, const wstring& strValue);
+    vector<wstring>& getFlags(const wstring& strSektion);
     const wstring& getUnique(const wstring& strSektion, const wstring& strAction, const wstring& strValue);
 
 private:
@@ -50,5 +51,6 @@ private:
     mutable chrono::steady_clock::time_point m_tLastCheck;
     time_t  m_tFileTime;
     unordered_map<wstring, unordered_map<wstring, unordered_map<wstring, wstring>>> m_mSections;
+    unordered_map<wstring, vector<wstring>> m_mSectionFlags;
     static map<wstring, ConfFile> s_lstConfFiles;
 };

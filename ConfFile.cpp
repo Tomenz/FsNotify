@@ -10,12 +10,12 @@
    Email:   Thomas@fam-hauck.de
 */
 
+#include "ConfFile.h"
+
 #include <fstream>
 #include <codecvt>
 #include <algorithm>
 #include <functional>
-
-#include "ConfFile.h"
 
 #if defined(_WIN32) || defined(_WIN64)
 #define FN_CA(x) x.c_str()
@@ -23,7 +23,7 @@
 #else
 #include <locale>
 #include <sys/stat.h>
-#include <math.h>
+#include <cmath>
 #define _stat stat
 #define _wstat stat
 #define FN_CA(x) wstring_convert<codecvt_utf8<wchar_t>, wchar_t>().to_bytes(x).c_str()
@@ -54,7 +54,8 @@ vector<wstring> ConfFile::get()
 
     vector<wstring> vReturn;
 
-    for (const auto& item : m_mSections)
+    vReturn.reserve(m_mSections.size());
+    for (const auto &item : m_mSections)
     {
         vReturn.push_back(item.first);
     }
@@ -80,7 +81,7 @@ vector<wstring> ConfFile::get(const wstring& strSektion)
     return vReturn;
 }
 
-vector<wstring> ConfFile::get(const wstring& strSektion, const wstring& strAction)
+vector<wstring> ConfFile::get(const wstring& strSektion, const wstring& strValue)
 {
     CheckFileLoaded();
 
@@ -89,7 +90,7 @@ vector<wstring> ConfFile::get(const wstring& strSektion, const wstring& strActio
     const auto& section = m_mSections.find(strSektion);
     if (section != end(m_mSections))
     {
-        auto item = section->second.equal_range(strAction);
+        auto item = section->second.equal_range(strValue);
         for (; item.first != item.second; ++item.first)
         {
             vReturn.push_back(item.first->first);
@@ -97,6 +98,20 @@ vector<wstring> ConfFile::get(const wstring& strSektion, const wstring& strActio
     }
 
     return vReturn;
+}
+
+vector<wstring>& ConfFile::getFlags(const wstring& strSektion)
+{
+    CheckFileLoaded();
+
+    const auto section = m_mSectionFlags.find(strSektion);
+    if (section != m_mSectionFlags.end())
+    {
+        return section->second;
+    }
+
+    static vector<wstring> strEmpty;
+    return strEmpty;
 }
 
 const wstring& ConfFile::getUnique(const wstring& strSektion, const wstring& strAction, const wstring& strValue)
@@ -150,6 +165,8 @@ int ConfFile::LoadFile(const wstring& strFilename)
 
             unordered_map<wstring, unordered_map<wstring, wstring>>* LastSection = nullptr;
             unordered_map<wstring, wstring>* LastTyp = nullptr;
+            vector<wstring>* LastFlag = nullptr;
+
             auto TrimString = [](wstring strVal) -> wstring
             {
                 size_t nPos = strVal.find_last_not_of(L" \t\r\n");
@@ -181,10 +198,17 @@ int ConfFile::LoadFile(const wstring& strFilename)
                             if (paRet.second == true)
                             {
                                 LastSection = &paRet.first->second;
+
+                                const auto& paRet = m_mSectionFlags.insert(make_pair(strTmp, vector<wstring>()));
+                                if (paRet.second == true)
+                                {
+                                    LastFlag = &paRet.first->second;
+                                }
                                 continue;
                             }
                         }
                         LastSection = nullptr;
+                        LastFlag = nullptr;
                     }
                     else if (nPos = strLine.find(L'='), nPos != string::npos && LastSection != nullptr)
                     {
@@ -194,6 +218,7 @@ int ConfFile::LoadFile(const wstring& strFilename)
                             if (strTmp == L"monitortyp")
                             {
                                 LastTyp = nullptr;
+                                LastFlag = nullptr;
                                 const auto& paRet = LastSection->insert(make_pair(TrimString(strLine.substr(nPos + 1)), unordered_map<wstring, wstring>()));
                                 if (paRet.second == true)
                                 {
@@ -203,6 +228,10 @@ int ConfFile::LoadFile(const wstring& strFilename)
                             else if (LastTyp != nullptr)
                             {
                                 LastTyp->insert(make_pair(strTmp, TrimString(strLine.substr(nPos + 1))));
+                            }
+                            else if (LastFlag != nullptr && strTmp == L"itemflag")
+                            {
+                                LastFlag->emplace_back(TrimString(strLine.substr(nPos + 1)));
                             }
                         }
                     }

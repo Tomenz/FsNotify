@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(dirnotify)
+project(fsnotify)
 
 ADD_DEFINITIONS(-DUNICODE)
 ADD_DEFINITIONS(-D_UNICODE)
@@ -32,7 +32,7 @@ include_directories(${CMAKE_SOURCE_DIR}/SrvLib)
 
 add_subdirectory(SrvLib EXCLUDE_FROM_ALL)
 
-file(READ "DirNotify.cpp" SrcFile)
+file(READ "FsNotify.cpp" SrcFile)
 string(REGEX MATCH "szSrvName = L\"([^\"]*)\"" _ ${SrcFile})
 set(SrvName ${CMAKE_MATCH_1})
 message("ServiceName: ${SrvName}")
@@ -42,7 +42,7 @@ if ("${SrvName}" STREQUAL "")
 endif()
 
 set(targetSrc
-        ${CMAKE_CURRENT_LIST_DIR}/DirNotify.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/FsNotify.cpp
         ${CMAKE_CURRENT_LIST_DIR}/ConfFile.cpp
 )
 
