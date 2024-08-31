@@ -5,6 +5,12 @@ project(fsnotify)
 ADD_DEFINITIONS(-DUNICODE)
 ADD_DEFINITIONS(-D_UNICODE)
 
+include(ExternalProject)
+ExternalProject_Add(SrvLib
+  GIT_REPOSITORY    https://github.com/Tomenz/SrvLib
+  GIT_TAG           origin/master
+)
+
 # specify the C++ standard
 set(SUPPORTED_CXX_STANDARDS 14 17)
 if(NOT DEFINED CMAKE_CXX_STANDARD)
