@@ -1,3 +1,5 @@
+[![CodeQL](https://github.com/Tomenz/FsNotify/actions/workflows/codeql.yml/badge.svg)](https://github.com/Tomenz/FsNotify/actions/workflows/codeql.yml)
+
 # FsNotify
 
 A linux systemd service to monitors directory's or files, an executes a user defined actions if a event is detected.
