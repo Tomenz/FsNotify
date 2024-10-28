@@ -1,4 +1,5 @@
 [![CodeQL](https://github.com/Tomenz/FsNotify/actions/workflows/codeql.yml/badge.svg)](https://github.com/Tomenz/FsNotify/actions/workflows/codeql.yml)
+[![Codacy Security Scan](https://github.com/Tomenz/FsNotify/actions/workflows/codacy.yml/badge.svg)](https://github.com/Tomenz/FsNotify/actions/workflows/codacy.yml)
 
 # FsNotify
 
